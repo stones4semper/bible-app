@@ -8,9 +8,10 @@ import {
   StyleSheet, 
   Animated,
   Easing,
-  Dimensions,
-  SafeAreaView 
+  Dimensions 
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { colors } from '../utils/colors';
 import { getVerses, getBookMaxChapter, getBooksCount } from '../lib/queries';
 import { BOOKS } from '../lib/books';
@@ -21,6 +22,7 @@ const { width } = Dimensions.get('window');
 export default function VersesScreen({ navigation, route }) {
   const b = useMemo(() => Number(route.params.book), [route.params.book]);       // 0-based
   const c = useMemo(() => Number(route.params.chapter), [route.params.chapter]); // 1..N
+  const insets = useSafeAreaInsets();
 
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -232,15 +234,18 @@ export default function VersesScreen({ navigation, route }) {
           offset: 80 * index,
           index,
         })}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: 70  } // was 100
+        ]}
         showsVerticalScrollIndicator={false}
       />
 
-      {/* Next/Prev footer */}
       <Animated.View
         style={[
-          styles.footer,
+          styles.footer,          
           { 
+            paddingBottom:insets.bottom,
             opacity: fadeAnim,
             transform: [{ translateY: footerSlideAnim }] 
           }
@@ -300,7 +305,7 @@ function NavButton({ direction, label, disabled, onPress }) {
   };
 
   return (
-    <Animated.View style={{ transform: [{ scale: scaleValue }] }}>
+    <Animated.View style={{ transform: [{ scale: scaleValue }]}}>
       <Pressable
         disabled={disabled}
         onPressIn={onPressIn}

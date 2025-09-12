@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, Text, View, StyleSheet, Animated, Easing, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { BOOKS } from '../lib/books';
 import { colors } from '../utils/colors';
 
@@ -118,39 +119,40 @@ export default function BooksScreen({ navigation }) {
     const bookColor = getBookColor(item.colorIndex);
 
     return (
-      <Animated.View 
-        style={{ 
-          transform: [
-            { scale: scaleValue },
-            { translateX: itemSlideAnim }
-          ],
-          opacity: fadeAnim
-        }}
-      >
-        <Pressable
-          onPressIn={onPressIn}
-          onPressOut={onPressOut}
-          onPress={handlePress}
-          style={({ pressed }) => [
-            styles.bookItem,
-            { 
-              backgroundColor: pressed ? colors.primaryLight + '15' : '#FFFFFF',
-              borderLeftWidth: 4,
-              borderLeftColor: bookColor
-            }
-          ]}
+      
+        <Animated.View 
+          style={{ 
+            transform: [
+              { scale: scaleValue },
+              { translateX: itemSlideAnim }
+            ],
+            opacity: fadeAnim
+          }}
         >
-          <View style={styles.bookContent}>
-            <View style={styles.bookTextContainer}>
-              <Text style={styles.bookName}>{item.name}</Text>
-              <Text style={styles.bookNumber}>{index + 1} Chapters</Text>
+          <Pressable
+            onPressIn={onPressIn}
+            onPressOut={onPressOut}
+            onPress={handlePress}
+            style={({ pressed }) => [
+              styles.bookItem,
+              { 
+                backgroundColor: pressed ? colors.primaryLight + '15' : '#FFFFFF',
+                borderLeftWidth: 4,
+                borderLeftColor: bookColor
+              }
+            ]}
+          >
+            <View style={styles.bookContent}>
+              <View style={styles.bookTextContainer}>
+                <Text style={styles.bookName}>{item.name}</Text>
+                <Text style={styles.bookNumber}>{index + 1} Chapters</Text>
+              </View>
+              <View style={[styles.bookIcon, { backgroundColor: bookColor + '20' }]}>
+                <Text style={[styles.bookIconText, { color: bookColor }]}>📖</Text>
+              </View>
             </View>
-            <View style={[styles.bookIcon, { backgroundColor: bookColor + '20' }]}>
-              <Text style={[styles.bookIconText, { color: bookColor }]}>📖</Text>
-            </View>
-          </View>
-        </Pressable>
-      </Animated.View>
+          </Pressable>
+        </Animated.View>
     );
   });
 
@@ -163,7 +165,7 @@ export default function BooksScreen({ navigation }) {
   );
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <LinearGradient
         colors={[colors.primary, colors.primaryDark]}
         style={styles.headerGradient}
@@ -208,7 +210,7 @@ export default function BooksScreen({ navigation }) {
           ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 

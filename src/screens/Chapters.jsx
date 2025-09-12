@@ -9,12 +9,13 @@ import {
   Animated,
   Easing,
   Dimensions,
-  SafeAreaView
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../utils/colors';
 import { getBookMaxChapter } from '../lib/queries';
 import { BOOKS } from '../lib/books';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons'; // Make sure to install this or use text icon
 
 const { width } = Dimensions.get('window');
 const COLUMN_COUNT = 5;
@@ -160,7 +161,7 @@ export default function ChaptersScreen({ navigation, route }) {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['right', 'left']}>
       <LinearGradient
         colors={[colors.primary, colors.primaryDark]}
         style={styles.headerGradient}
@@ -176,10 +177,24 @@ export default function ChaptersScreen({ navigation, route }) {
             }
           ]}
         >
-          <View>
+          {/* Back Button */}
+          <Pressable 
+            onPress={() => navigation.goBack()}
+            style={({ pressed }) => [
+              styles.backButton,
+              { opacity: pressed ? 0.7 : 1 }
+            ]}
+          >
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </Pressable>
+
+          {/* Title Section */}
+          <View style={styles.titleContainer}>
             <Text style={styles.bookTitle}>{BOOKS[b]}</Text>
             <Text style={styles.chaptersTitle}>Select a Chapter</Text>
           </View>
+
+          {/* Chapter Count */}
           <View style={styles.chapterCount}>
             <Text style={styles.chapterCountText}>{max} Chapters</Text>
           </View>
@@ -233,7 +248,7 @@ const styles = StyleSheet.create({
   },
   headerGradient: {
     paddingTop: 50,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingBottom: 20,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
@@ -248,22 +263,34 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  backButton: {
+    padding: 8,
+    marginRight: 8,
+  },
+  titleContainer: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 8,
+  },
   bookTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '800',
     color: '#FFFFFF',
-    marginBottom: 4,
+    marginBottom: 2,
+    textAlign: 'center',
   },
   chaptersTitle: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#FFFFFF',
     opacity: 0.9,
+    textAlign: 'center',
   },
   chapterCount: {
     backgroundColor: '#FFFFFF20',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 16,
+    marginLeft: 8,
   },
   chapterCountText: {
     fontSize: 14,
