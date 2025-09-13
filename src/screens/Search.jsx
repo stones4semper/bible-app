@@ -105,7 +105,7 @@ export default function SearchScreen({ navigation }) {
   const SearchResultItem = React.memo(({ item, index }) => {
     return (
       <Pressable
-        onPress={() => navigation.navigate('Verses', { book: item.Book, chapter: item.Chapter })}
+        onPress={() => navigation.navigate('Verses', { book: item.Book, chapter: item.Chapter, verse: item.Versecount })}
         style={({ pressed }) => [
           styles.resultItem,
           { backgroundColor: pressed ? colors.primaryLight + '10' : colors.surface }
