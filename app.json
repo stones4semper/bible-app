@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "bible",
-    "slug": "bible-app",
+    "name": "Eloike Bible",
+    "slug": "eloike-bible",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -36,11 +36,19 @@
             "useSQLCipher": false
           },
           "ios": {
-            "customBuildFlags": ["-DSQLITE_ENABLE_DBSTAT_VTAB=1 -DSQLITE_ENABLE_SNAPSHOT=1"]
+            "customBuildFlags": [
+              "-DSQLITE_ENABLE_DBSTAT_VTAB=1 -DSQLITE_ENABLE_SNAPSHOT=1"
+            ]
           }
         }
       ],
       "expo-asset"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "358169c4-72e8-4b1e-94de-182bcb2b9234"
+      }
+    },
+    "owner": "eloike121"
   }
 }

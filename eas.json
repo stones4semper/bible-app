@@ -1,0 +1,55 @@
+{
+	"cli": {
+	  "appVersionSource": "remote",
+	  "version": ">= 12.6.0"
+	},
+	"build": {
+	  "preview": {
+		"channel": "preview",
+		"distribution": "internal",
+		"credentialsSource": "remote",
+		"node": "20.11.1",
+		"env": {
+		  "NPM_CONFIG_LEGACY_PEER_DEPS": "true",
+		  "NPM_CONFIG_AUDIT": "false",
+		  "NPM_CONFIG_FUND": "false"
+		},
+		"android": {
+		  "buildType": "apk"
+		},
+		"hooks": {
+		  "pre-install": "echo 'Node:' $(node -v); echo 'NPM:' $(npm -v); npm config list --location=project || true"
+		}
+	  },
+	  "production": {
+		"channel": "production",
+		"autoIncrement": true,
+		"distribution": "store",
+		"credentialsSource": "remote",
+		"node": "20.11.1",
+		"env": {
+		  "NPM_CONFIG_AUDIT": "false",
+		  "NPM_CONFIG_FUND": "false"
+		},
+		"android": {
+		  "buildType": "app-bundle"
+		},
+		"ios": {
+		  "image": "macos-sequoia-15.3-xcode-16.2"
+		}
+	  },
+	  "ios-sim": {
+		"distribution": "internal",
+		"ios": { "simulator": true },
+		"node": "20.11.1"
+	  }
+	},
+	"submit": {
+	  "production": {
+		"android": {
+		  "track": "production"
+		}
+	  }
+	}
+  }
+  

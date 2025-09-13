@@ -9,11 +9,11 @@ import {
   Animated,
   Easing,
   Dimensions,
-  ScrollView
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 import { colors } from '../utils/colors';
 import { getVerses, getBookMaxChapter, getBooksCount } from '../lib/queries';
 import { BOOKS } from '../lib/books';
@@ -213,98 +213,101 @@ export default function VersesScreen({ navigation, route }) {
   }
 
   return (
-    <View style={styles.container}>
-      {/* Custom Header */}
-      <LinearGradient
-        colors={[colors.primary, colors.primaryDark]}
-        style={[styles.headerGradient, { paddingTop: insets.top + 10 }]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <Animated.View 
+      <SafeAreaView style={styles.container} edges={['right', 'left']}>
+        <StatusBar 
+          style={"light"}
+          backgroundColor={colors.primary}
+        />
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <LinearGradient
+          colors={[colors.primary, colors.primaryDark]}
+          style={[styles.headerGradient, { paddingTop: insets.top + 10 }]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        >
+          <Animated.View 
+            style={[
+              styles.header,
+              { 
+                opacity: fadeAnim,
+                transform: [{ translateY: headerSlideAnim }] 
+              }
+            ]}
+          >
+            {/* Back Button */}
+            <Pressable 
+              onPress={() => navigation.goBack()}
+              style={({ pressed }) => [
+                styles.backButton,
+                { opacity: pressed ? 0.7 : 1 }
+              ]}
+            >
+              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            </Pressable>
+
+            {/* Title Section */}
+            <View style={styles.titleContainer}>
+              <Text style={styles.bookTitle}>{BOOKS[b]}</Text>
+              <Text style={styles.chapterTitle}>Chapter {c}</Text>
+              {maxChapter ? (
+                <Text style={styles.chapterProgress}>
+                  {c} of {maxChapter}
+                </Text>
+              ) : null}
+            </View>
+
+            {/* Spacer for balance */}
+            <View style={styles.headerSpacer} />
+          </Animated.View>
+        </LinearGradient>
+
+        <FlatList
+          data={data}
+          keyExtractor={(item) => String(item.Versecount)}
+          renderItem={({ item, index }) => <VerseItem item={item} index={index} />}
+          initialNumToRender={20}
+          maxToRenderPerBatch={20}
+          windowSize={10}
+          removeClippedSubviews
+          contentContainerStyle={[styles.listContent, { paddingBottom: 100 }]}
+          showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+        />
+
+        <Animated.View
           style={[
-            styles.header,
+            styles.footer,
             { 
+              paddingBottom: insets.bottom,
               opacity: fadeAnim,
-              transform: [{ translateY: headerSlideAnim }] 
+              transform: [{ translateY: footerSlideAnim }] 
             }
           ]}
         >
-          {/* Back Button */}
-          <Pressable 
-            onPress={() => navigation.goBack()}
-            style={({ pressed }) => [
-              styles.backButton,
-              { opacity: pressed ? 0.7 : 1 }
-            ]}
-          >
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          </Pressable>
-
-          {/* Title Section */}
-          <View style={styles.titleContainer}>
-            <Text style={styles.bookTitle}>{BOOKS[b]}</Text>
-            <Text style={styles.chapterTitle}>Chapter {c}</Text>
-            {maxChapter ? (
-              <Text style={styles.chapterProgress}>
-                {c} of {maxChapter}
+          <View style={styles.navButtons}>
+            <NavButton
+              direction="prev"
+              label={prevTarget ? `← ${BOOKS[prevTarget.book]} ${prevTarget.chapter}` : '← Previous'}
+              disabled={!prevTarget || navBusy}
+              onPress={() => goTo(prevTarget)}
+            />
+            
+            <View style={styles.currentIndicator}>
+              <Text style={styles.currentText}>
+                {BOOKS[b]} {c}
               </Text>
-            ) : null}
+            </View>
+            
+            <NavButton
+              direction="next"
+              label={nextTarget ? `${BOOKS[nextTarget.book]} ${nextTarget.chapter} →` : 'Next →'}
+              disabled={!nextTarget || navBusy}
+              onPress={() => goTo(nextTarget)}
+            />
           </View>
-
-          {/* Spacer for balance */}
-          <View style={styles.headerSpacer} />
         </Animated.View>
-      </LinearGradient>
-
-      {/* Verses List */}
-      <FlatList
-        data={data}
-        keyExtractor={(item) => String(item.Versecount)}
-        renderItem={({ item, index }) => <VerseItem item={item} index={index} />}
-        initialNumToRender={20}
-        maxToRenderPerBatch={20}
-        windowSize={10}
-        removeClippedSubviews
-        contentContainerStyle={[styles.listContent, { paddingBottom: 100 }]}
-        showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
-      />
-
-      {/* Navigation Footer */}
-      <Animated.View
-        style={[
-          styles.footer,
-          { 
-            paddingBottom: insets.bottom,
-            opacity: fadeAnim,
-            transform: [{ translateY: footerSlideAnim }] 
-          }
-        ]}
-      >
-        <View style={styles.navButtons}>
-          <NavButton
-            direction="prev"
-            label={prevTarget ? `← ${BOOKS[prevTarget.book]} ${prevTarget.chapter}` : '← Previous'}
-            disabled={!prevTarget || navBusy}
-            onPress={() => goTo(prevTarget)}
-          />
-          
-          <View style={styles.currentIndicator}>
-            <Text style={styles.currentText}>
-              {BOOKS[b]} {c}
-            </Text>
-          </View>
-          
-          <NavButton
-            direction="next"
-            label={nextTarget ? `${BOOKS[nextTarget.book]} ${nextTarget.chapter} →` : 'Next →'}
-            disabled={!nextTarget || navBusy}
-            onPress={() => goTo(nextTarget)}
-          />
-        </View>
-      </Animated.View>
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -351,7 +354,7 @@ function NavButton({ direction, label, disabled, onPress }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.primaryDark,
   },
   loadingContainer: {
     flex: 1,

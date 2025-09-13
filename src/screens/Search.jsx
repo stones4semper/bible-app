@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../utils/colors';
+import { StatusBar } from 'expo-status-bar';
 import { searchVerses } from '../lib/queries';
 import { BOOKS } from '../lib/books';
 import { Ionicons } from '@expo/vector-icons';
@@ -122,118 +123,124 @@ export default function SearchScreen({ navigation }) {
   });
 
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={[colors.primary, colors.primaryDark]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <Animated.View 
-          style={[
-            styles.header,
-            { 
-              opacity: fadeAnim,
-              transform: [{ translateY: headerSlideAnim }] 
-            }
-          ]}
+      <SafeAreaView style={styles.container} edges={['right', 'left']}>
+        <StatusBar 
+          style={"light"}
+          backgroundColor={colors.primary}
+        />
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <LinearGradient
+          colors={[colors.primary, colors.primaryDark]}
+          style={styles.headerGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
         >
-          {/* Back Button */}
-          <Pressable 
-            onPress={() => navigation.goBack()}
-            style={({ pressed }) => [
-              styles.backButton,
-              { opacity: pressed ? 0.7 : 1 }
+          <Animated.View 
+            style={[
+              styles.header,
+              { 
+                opacity: fadeAnim,
+                transform: [{ translateY: headerSlideAnim }] 
+              }
             ]}
           >
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          </Pressable>
+            {/* Back Button */}
+            <Pressable 
+              onPress={() => navigation.goBack()}
+              style={({ pressed }) => [
+                styles.backButton,
+                { opacity: pressed ? 0.7 : 1 }
+              ]}
+            >
+              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            </Pressable>
 
-          {/* Search Input */}
-          <View style={styles.searchContainer}>
-            <Ionicons name="search" size={20} color="#FFFFFF" style={styles.searchIcon} />
-            <TextInput
-              value={q}
-              onChangeText={setQ}
-              placeholder="Search scriptures..."
-              placeholderTextColor="#FFFFFF90"
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="search"
-              onSubmitEditing={() => setQ(q)}
-              clearButtonMode="while-editing"
-              style={styles.searchInput}
+            {/* Search Input */}
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={20} color="#FFFFFF" style={styles.searchIcon} />
+              <TextInput
+                value={q}
+                onChangeText={setQ}
+                placeholder="Search scriptures..."
+                placeholderTextColor="#FFFFFF90"
+                autoCapitalize="none"
+                autoCorrect={false}
+                returnKeyType="search"
+                onSubmitEditing={() => setQ(q)}
+                clearButtonMode="while-editing"
+                style={styles.searchInput}
+              />
+            </View>
+
+            {/* Spacer for balance */}
+            <View style={styles.headerSpacer} />
+          </Animated.View>
+        </LinearGradient>
+
+        {debouncedQ.length >= 2 && res.length > 0 && (
+          <View style={styles.resultsCount}>
+            <Text style={styles.searchInfo}>
+              {res.length} result{res.length !== 1 ? 's' : ''} found
+            </Text>
+          </View>
+        )}
+
+        {err && (
+          <View style={styles.errorContainer}>
+            <Ionicons name="warning" size={20} color={colors.error} />
+            <Text style={styles.errorText}>Search failed. Please try again.</Text>
+          </View>
+        )}
+
+        {loading && res.length === 0 ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Searching for "{debouncedQ}"...</Text>
+          </View>
+        ) : (
+          <View style={styles.resultsContainer}>
+            <FlatList
+              data={res}
+              keyExtractor={keyExtractor}
+              renderItem={({ item, index }) => <SearchResultItem item={item} index={index} />}
+              initialNumToRender={20}
+              maxToRenderPerBatch={20}
+              windowSize={10}
+              removeClippedSubviews
+              onEndReachedThreshold={0.5}
+              onEndReached={loadMore}
+              contentContainerStyle={styles.listContent}
+              ListEmptyComponent={
+                debouncedQ.length >= 2 && !loading ? (
+                  <View style={styles.emptyContainer}>
+                    <Ionicons name="search" size={40} color={colors.textTertiary} />
+                    <Text style={styles.emptyTitle}>No results found</Text>
+                    <Text style={styles.emptyText}>
+                      No matches found for "{debouncedQ}". Try different keywords.
+                    </Text>
+                  </View>
+                ) : debouncedQ.length === 0 ? (
+                  <View style={styles.initialContainer}>
+                    <Ionicons name="search" size={60} color={colors.textTertiary} />
+                    <Text style={styles.initialTitle}>Search Scriptures</Text>
+                    <Text style={styles.initialText}>
+                      Enter at least 2 characters to search through all books and verses.
+                    </Text>
+                  </View>
+                ) : null
+              }
+              ListFooterComponent={
+                loading && res.length > 0 ? (
+                  <View style={styles.footerLoading}>
+                    <ActivityIndicator size="small" color={colors.primary} />
+                    <Text style={styles.footerLoadingText}>Loading more results...</Text>
+                  </View>
+                ) : null
+              }
             />
           </View>
-
-          {/* Spacer for balance */}
-          <View style={styles.headerSpacer} />
-        </Animated.View>
-      </LinearGradient>
-
-      {debouncedQ.length >= 2 && res.length > 0 && (
-        <View style={styles.resultsCount}>
-          <Text style={styles.searchInfo}>
-            {res.length} result{res.length !== 1 ? 's' : ''} found
-          </Text>
-        </View>
-      )}
-
-      {err && (
-        <View style={styles.errorContainer}>
-          <Ionicons name="warning" size={20} color={colors.error} />
-          <Text style={styles.errorText}>Search failed. Please try again.</Text>
-        </View>
-      )}
-
-      {loading && res.length === 0 ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Searching for "{debouncedQ}"...</Text>
-        </View>
-      ) : (
-        <View style={styles.resultsContainer}>
-          <FlatList
-            data={res}
-            keyExtractor={keyExtractor}
-            renderItem={({ item, index }) => <SearchResultItem item={item} index={index} />}
-            initialNumToRender={20}
-            maxToRenderPerBatch={20}
-            windowSize={10}
-            removeClippedSubviews
-            onEndReachedThreshold={0.5}
-            onEndReached={loadMore}
-            contentContainerStyle={styles.listContent}
-            ListEmptyComponent={
-              debouncedQ.length >= 2 && !loading ? (
-                <View style={styles.emptyContainer}>
-                  <Ionicons name="search" size={40} color={colors.textTertiary} />
-                  <Text style={styles.emptyTitle}>No results found</Text>
-                  <Text style={styles.emptyText}>
-                    No matches found for "{debouncedQ}". Try different keywords.
-                  </Text>
-                </View>
-              ) : debouncedQ.length === 0 ? (
-                <View style={styles.initialContainer}>
-                  <Ionicons name="search" size={60} color={colors.textTertiary} />
-                  <Text style={styles.initialTitle}>Search Scriptures</Text>
-                  <Text style={styles.initialText}>
-                    Enter at least 2 characters to search through all books and verses.
-                  </Text>
-                </View>
-              ) : null
-            }
-            ListFooterComponent={
-              loading && res.length > 0 ? (
-                <View style={styles.footerLoading}>
-                  <ActivityIndicator size="small" color={colors.primary} />
-                  <Text style={styles.footerLoadingText}>Loading more results...</Text>
-                </View>
-              ) : null
-            }
-          />
-        </View>
-      )}
+        )}
+      </View>
     </SafeAreaView>
   );
 }
@@ -277,7 +284,7 @@ function Highlighted({ text, query }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.primaryDark,
   },
   headerGradient: {
     paddingTop: 50,

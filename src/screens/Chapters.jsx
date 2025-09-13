@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons'; 
+import { StatusBar } from 'expo-status-bar';
 import { colors } from '../utils/colors';
 import { getBookMaxChapter } from '../lib/queries';
 import { BOOKS } from '../lib/books';
@@ -162,70 +163,76 @@ export default function ChaptersScreen({ navigation, route }) {
 
   return (
     <SafeAreaView style={styles.container} edges={['right', 'left']}>
-      <LinearGradient
-        colors={[colors.primary, colors.primaryDark]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
+      <StatusBar 
+        style={"light"}
+        backgroundColor={colors.primary}
+      />
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <LinearGradient
+          colors={[colors.primary, colors.primaryDark]}
+          style={styles.headerGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+        >
+          <Animated.View 
+            style={[
+              styles.header,
+              { 
+                opacity: fadeAnim,
+                transform: [{ translateY: headerSlideAnim }] 
+              }
+            ]}
+          >
+            {/* Back Button */}
+            <Pressable 
+              onPress={() => navigation.goBack()}
+              style={({ pressed }) => [
+                styles.backButton,
+                { opacity: pressed ? 0.7 : 1 }
+              ]}
+            >
+              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            </Pressable>
+
+            {/* Title Section */}
+            <View style={styles.titleContainer}>
+              <Text style={styles.bookTitle}>{BOOKS[b]}</Text>
+              <Text style={styles.chaptersTitle}>Select a Chapter</Text>
+            </View>
+
+            {/* Chapter Count */}
+            <View style={styles.chapterCount}>
+              <Text style={styles.chapterCountText}>{max} Chapters</Text>
+            </View>
+          </Animated.View>
+        </LinearGradient>
+
         <Animated.View 
           style={[
-            styles.header,
+            styles.content,
             { 
               opacity: fadeAnim,
-              transform: [{ translateY: headerSlideAnim }] 
+              transform: [{ translateY: itemsSlideAnim }] 
             }
           ]}
         >
-          {/* Back Button */}
-          <Pressable 
-            onPress={() => navigation.goBack()}
-            style={({ pressed }) => [
-              styles.backButton,
-              { opacity: pressed ? 0.7 : 1 }
-            ]}
-          >
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          </Pressable>
-
-          {/* Title Section */}
-          <View style={styles.titleContainer}>
-            <Text style={styles.bookTitle}>{BOOKS[b]}</Text>
-            <Text style={styles.chaptersTitle}>Select a Chapter</Text>
-          </View>
-
-          {/* Chapter Count */}
-          <View style={styles.chapterCount}>
-            <Text style={styles.chapterCountText}>{max} Chapters</Text>
-          </View>
+          <FlatList
+            data={Array.from({ length: max }, (_, i) => i + 1)} // 1..max
+            keyExtractor={(i) => String(i)}
+            numColumns={COLUMN_COUNT}
+            contentContainerStyle={styles.listContent}
+            columnWrapperStyle={styles.columnWrapper}
+            renderItem={({ item, index }) => (
+              <ChapterButton chapter={item} index={index} />
+            )}
+            ListEmptyComponent={
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>No chapters found for this book.</Text>
+              </View>
+            }
+          />
         </Animated.View>
-      </LinearGradient>
-
-      <Animated.View 
-        style={[
-          styles.content,
-          { 
-            opacity: fadeAnim,
-            transform: [{ translateY: itemsSlideAnim }] 
-          }
-        ]}
-      >
-        <FlatList
-          data={Array.from({ length: max }, (_, i) => i + 1)} // 1..max
-          keyExtractor={(i) => String(i)}
-          numColumns={COLUMN_COUNT}
-          contentContainerStyle={styles.listContent}
-          columnWrapperStyle={styles.columnWrapper}
-          renderItem={({ item, index }) => (
-            <ChapterButton chapter={item} index={index} />
-          )}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No chapters found for this book.</Text>
-            </View>
-          }
-        />
-      </Animated.View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -233,7 +240,7 @@ export default function ChaptersScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.primaryDark,
   },
   loadingContainer: {
     flex: 1,

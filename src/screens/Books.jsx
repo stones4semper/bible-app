@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, Text, View, StyleSheet, Animated, Easing, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { BOOKS } from '../lib/books';
 import { colors } from '../utils/colors';
 
@@ -165,50 +166,56 @@ export default function BooksScreen({ navigation }) {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      <LinearGradient
-        colors={[colors.primary, colors.primaryDark]}
-        style={styles.headerGradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-      >
-        <Animated.View 
-          style={[
-            styles.header,
-            { 
-              opacity: fadeAnim,
-              transform: [{ translateY: headerSlideAnim }] 
-            }
-          ]}
+      <SafeAreaView style={styles.container} edges={['right', 'left']}>
+        <StatusBar 
+          style={"light"}
+          backgroundColor={colors.primary}
+        />
+        <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <LinearGradient
+          colors={[colors.primary, colors.primaryDark]}
+          style={styles.headerGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
         >
-          <View>
-            <Text style={styles.headerTitle}>Sacred Texts</Text>
-            <Text style={styles.headerSubtitle}>Select a Book to Explore</Text>
-          </View>
-          <Pressable 
-            onPress={() => navigation.navigate('Search')}
-            style={({ pressed }) => [
-              styles.searchButton,
-              { backgroundColor: pressed ? '#FFFFFF20' : '#FFFFFF10' }
+          <Animated.View 
+            style={[
+              styles.header,
+              { 
+                opacity: fadeAnim,
+                transform: [{ translateY: headerSlideAnim }] 
+              }
             ]}
           >
-            <Text style={styles.searchIcon}>🔍</Text>
-            <Text style={styles.searchText}>Search</Text>
-          </Pressable>
-        </Animated.View>
-      </LinearGradient>
+            <View>
+              <Text style={styles.headerTitle}>Sacred Texts</Text>
+              <Text style={styles.headerSubtitle}>Select a Book to Explore</Text>
+            </View>
+            <Pressable 
+              onPress={() => navigation.navigate('Search')}
+              style={({ pressed }) => [
+                styles.searchButton,
+                { backgroundColor: pressed ? '#FFFFFF20' : '#FFFFFF10' }
+              ]}
+            >
+              <Text style={styles.searchIcon}>🔍</Text>
+              <Text style={styles.searchText}>Search</Text>
+            </Pressable>
+          </Animated.View>
+        </LinearGradient>
 
-      <View style={styles.content}>
-        <Text style={styles.booksCount}>{data.length} Books Available</Text>
-        
-        <FlatList
-          data={data}
-          keyExtractor={(item) => String(item.id)}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-        />
+        <View style={styles.content}>
+          <Text style={styles.booksCount}>{data.length} Books Available</Text>
+          
+          <FlatList
+            data={data}
+            keyExtractor={(item) => String(item.id)}
+            renderItem={renderItem}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
+          />
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -217,7 +224,7 @@ export default function BooksScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.primaryDark,
   },
   headerGradient: {
     paddingTop: 50,
