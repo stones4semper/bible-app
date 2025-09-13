@@ -12,3 +12,6 @@ eas update --channel preview --message "new update"
 eas submit --platform ios --message "new update"
 
 eas submit --platform android --message "new update"
+
+
+https://github.com/jadenzaleski/BibleTranslations

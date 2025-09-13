@@ -13,6 +13,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
+import * as Speech from 'expo-speech';
 import { colors as themeColors } from '../utils/colors';
 import { getVerses, getBookMaxChapter, getBooksCount } from '../lib/queries';
 import { BOOKS } from '../lib/books';
@@ -39,6 +40,11 @@ export default function VersesScreen({ navigation, route }) {
   const [prevTarget, setPrevTarget] = useState(null);
   const [nextTarget, setNextTarget] = useState(null);
   const [navBusy, setNavBusy] = useState(false);
+
+  // --- Speech state ---
+  const [isReading, setIsReading] = useState(false);
+  const [currentReadIndex, setCurrentReadIndex] = useState(-1); // -1 means idle
+  const speechCancelledRef = useRef(false);
 
   // screen-level animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -88,7 +94,7 @@ export default function VersesScreen({ navigation, route }) {
     };
   }, [b, c]);
 
-  // auto-scroll to verse if provided
+  // auto-scroll to verse if provided (on initial render)
   useEffect(() => {
     if (!v || !data?.length || !flatListRef.current) return;
     const index = data.findIndex((row) => Number(row.Versecount) === Number(v));
@@ -153,6 +159,8 @@ export default function VersesScreen({ navigation, route }) {
 
   const goTo = (target) => {
     if (!target || navBusy) return;
+    // stop reading when changing chapter
+    stopReading();
     setNavBusy(true);
     fadeAnim.setValue(0);
     headerSlideAnim.setValue(-50);
@@ -161,14 +169,117 @@ export default function VersesScreen({ navigation, route }) {
     setTimeout(() => setNavBusy(false), 50);
   };
 
+  // ---------------- Speech controls (expo-speech) ----------------
+  useEffect(() => {
+    // stop any speech on unmount
+    return () => {
+      speechCancelledRef.current = true;
+      Speech.stop();
+    };
+  }, []);
+
+  const speakOne = async (i) => {
+    if (!data || i < 0 || i >= data.length) return 'invalid';
+    const text = String(data[i]?.verse ?? '').trim();
+    if (!text) return 'empty';
+    return new Promise((resolve) => {
+      Speech.speak(text, {
+        language: 'en-US', // TODO: make this configurable from settings
+        rate: 0.5,
+        pitch: 1.0,
+        onDone: () => resolve('done'),
+        onStopped: () => resolve('stopped'),
+        onError: () => resolve('error'),
+      });
+    });
+  };
+
+  const playFromIndex = async (start) => {
+    if (!data?.length) return;
+    let i = Math.max(0, Math.min(start, data.length - 1));
+    speechCancelledRef.current = false;
+    setIsReading(true);
+    setCurrentReadIndex(i);
+
+    while (!speechCancelledRef.current && i < data.length) {
+      // eslint-disable-next-line no-await-in-loop
+      const r = await speakOne(i);
+      if (speechCancelledRef.current) break;
+      if (r === 'stopped' || r === 'error' || r === 'invalid') break;
+      i += 1;
+      setCurrentReadIndex(i);
+    }
+    if (!speechCancelledRef.current) {
+      setIsReading(false);
+      setCurrentReadIndex(-1);
+    }
+  };
+
+  const play = () => {
+    if (!data?.length) return;
+    if (currentReadIndex === -1) {
+      // Start at route.params.verse if present, else 0
+      if (v != null) {
+        const idx = data.findIndex((row) => Number(row.Versecount) === Number(v));
+        playFromIndex(idx >= 0 ? idx : 0);
+      } else {
+        playFromIndex(0);
+      }
+    } else {
+      playFromIndex(currentReadIndex);
+    }
+  };
+
+  const pause = () => {
+    // expo-speech pause/resume not consistent; emulate pause by stopping but keeping index
+    speechCancelledRef.current = true;
+    Speech.stop();
+    setIsReading(false);
+    // keep currentReadIndex as-is
+  };
+
+  const stopReading = () => {
+    speechCancelledRef.current = true;
+    Speech.stop();
+    setIsReading(false);
+    setCurrentReadIndex(-1);
+  };
+
+  const nextVerse = () => {
+    if (!data?.length) return;
+    const nextIdx = Math.min(currentReadIndex === -1 ? 0 : currentReadIndex + 1, data.length - 1);
+    stopReading();
+    playFromIndex(nextIdx);
+  };
+
+  const prevVerse = () => {
+    if (!data?.length) return;
+    const prevIdx = Math.max(currentReadIndex === -1 ? 0 : currentReadIndex - 1, 0);
+    stopReading();
+    playFromIndex(prevIdx);
+  };
+
+  // Auto-scroll to verse being read
+  useEffect(() => {
+    if (currentReadIndex < 0 || !flatListRef.current) return;
+    const id = setTimeout(() => {
+      flatListRef.current?.scrollToIndex({
+        index: currentReadIndex,
+        animated: true,
+        viewPosition: 0.25,
+      });
+    }, 60);
+    return () => clearTimeout(id);
+  }, [currentReadIndex]);
+
   const VerseItem = ({ item, index, isSelected }) => {
     // native-driven values (safe for transform/opacity)
     const verseScale = useRef(new Animated.Value(0.9)).current;
     const verseSlide = useRef(new Animated.Value(20)).current;
-  
+
     // JS-driven value (needed for backgroundColor/interpolation)
     const pulse = useRef(new Animated.Value(0)).current; // 0..1
-  
+
     useEffect(() => {
       // native animations on OUTER node
       Animated.parallel([
@@ -187,7 +298,7 @@ export default function VersesScreen({ navigation, route }) {
           useNativeDriver: true,
         }),
       ]).start();
-  
+
       if (isSelected) {
         // JS animation on INNER node
         Animated.sequence([
@@ -197,19 +308,19 @@ export default function VersesScreen({ navigation, route }) {
           Animated.timing(pulse, { toValue: 0, duration: 520, useNativeDriver: false }),
         ]).start();
       }
-    }, []);
-  
+    }, [isSelected]);
+
     const bg = pulse.interpolate({
       inputRange: [0, 1],
-      outputRange: [HIGHLIGHT, HIGHLIGHT_PULSE], // use your constants
+      outputRange: [HIGHLIGHT, HIGHLIGHT_PULSE],
     });
-  
+
     return (
       // OUTER: native driver only (transform + opacity)
       <Animated.View
         style={{
           transform: [{ scale: verseScale }, { translateX: verseSlide }],
-          opacity: fadeAnim, // keep this native-driven as you had it
+          opacity: fadeAnim,
         }}
       >
         {/* INNER: JS driver only (backgroundColor pulse) */}
@@ -217,7 +328,7 @@ export default function VersesScreen({ navigation, route }) {
           style={[
             styles.verseItem,
             isSelected && {
-              backgroundColor: bg,           // JS-driven color
+              backgroundColor: bg,
               borderColor: colors.primary,
               borderWidth: 1.5,
             },
@@ -238,7 +349,7 @@ export default function VersesScreen({ navigation, route }) {
               {item.Versecount}
             </Text>
           </View>
-  
+
           <Text
             style={[
               styles.verseText,
@@ -251,7 +362,6 @@ export default function VersesScreen({ navigation, route }) {
       </Animated.View>
     );
   };
-  
 
   if (loading) {
     return (
@@ -323,14 +433,16 @@ export default function VersesScreen({ navigation, route }) {
             <VerseItem
               item={item}
               index={index}
-              isSelected={Number(item.Versecount) === Number(v)}
+              isSelected={
+                Number(item.Versecount) === Number(v) || index === currentReadIndex
+              }
             />
           )}
           initialNumToRender={20}
           maxToRenderPerBatch={20}
           windowSize={10}
           removeClippedSubviews
-          contentContainerStyle={[styles.listContent, { paddingBottom: 100 }]}
+          contentContainerStyle={[styles.listContent, { paddingBottom: 160 }]}  
           showsVerticalScrollIndicator={false}
           scrollEventThrottle={16}
           onScrollToIndexFailed={(info) => {
@@ -346,7 +458,34 @@ export default function VersesScreen({ navigation, route }) {
           }}
         />
 
-        {/* Prev/Next footer */}
+        {/* Player (Speech) */}
+        <View style={[styles.playerBar, { paddingBottom: Math.max(8, (insets.bottom || 0) / 2) }]}>
+          <Pressable onPress={prevVerse} style={styles.playerBtn}>
+            <Ionicons name="play-skip-back" size={20} color="#fff" />
+          </Pressable>
+
+          {isReading ? (
+            <Pressable onPress={pause} style={[styles.playerBtn, styles.playerMain]}>
+              <Ionicons name="pause" size={20} color="#fff" />
+              <Text style={styles.playerText}>Pause</Text>
+            </Pressable>
+          ) : (
+            <Pressable onPress={play} style={[styles.playerBtn, styles.playerMain]}>
+              <Ionicons name="play" size={20} color="#fff" />
+              <Text style={styles.playerText}>Play</Text>
+            </Pressable>
+          )}
+
+          <Pressable onPress={stopReading} style={styles.playerBtn}>
+            <Ionicons name="stop" size={20} color="#fff" />
+          </Pressable>
+
+          <Pressable onPress={nextVerse} style={styles.playerBtn}>
+            <Ionicons name="play-skip-forward" size={20} color="#fff" />
+          </Pressable>
+        </View>
+
+        {/* Prev/Next chapter footer */}
         <Animated.View
           style={[
             styles.footer,
@@ -457,6 +596,7 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 40 },
 
   listContent: { padding: 20, paddingTop: 24 },
+
   verseItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -482,6 +622,30 @@ const styles = StyleSheet.create({
   },
   verseNumberText: { fontSize: 14, fontWeight: '700', color: colors.primary },
   verseText: { flex: 1, fontSize: 17, lineHeight: 26, color: colors.textPrimary, textAlign: 'justify' },
+
+  // Player bar
+  playerBar: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 80, // sits above the chapter footer
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    elevation: 8,
+  },
+  playerBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF20',
+  },
+  playerMain: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  playerText: { color: '#fff', fontWeight: '700' },
 
   footer: {
     position: 'absolute',
