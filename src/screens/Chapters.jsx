@@ -11,11 +11,11 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons'; 
 import { colors } from '../utils/colors';
 import { getBookMaxChapter } from '../lib/queries';
 import { BOOKS } from '../lib/books';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons'; // Make sure to install this or use text icon
 
 const { width } = Dimensions.get('window');
 const COLUMN_COUNT = 5;

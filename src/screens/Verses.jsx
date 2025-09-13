@@ -8,20 +8,21 @@ import {
   StyleSheet, 
   Animated,
   Easing,
-  Dimensions 
+  Dimensions,
+  ScrollView
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../utils/colors';
 import { getVerses, getBookMaxChapter, getBooksCount } from '../lib/queries';
 import { BOOKS } from '../lib/books';
-import { Ionicons } from '@expo/vector-icons'; // Or use text icons if unavailable
 
 const { width } = Dimensions.get('window');
 
 export default function VersesScreen({ navigation, route }) {
-  const b = useMemo(() => Number(route.params.book), [route.params.book]);       // 0-based
-  const c = useMemo(() => Number(route.params.chapter), [route.params.chapter]); // 1..N
+  const b = useMemo(() => Number(route.params.book), [route.params.book]);
+  const c = useMemo(() => Number(route.params.chapter), [route.params.chapter]);
   const insets = useSafeAreaInsets();
 
   const [data, setData] = useState([]);
@@ -30,8 +31,8 @@ export default function VersesScreen({ navigation, route }) {
 
   const [booksCount, setBooksCount] = useState(null);
   const [maxChapter, setMaxChapter] = useState(null);
-  const [prevTarget, setPrevTarget] = useState(null); // { book, chapter } or null
-  const [nextTarget, setNextTarget] = useState(null); // { book, chapter } or null
+  const [prevTarget, setPrevTarget] = useState(null);
+  const [nextTarget, setNextTarget] = useState(null);
   const [navBusy, setNavBusy] = useState(false);
 
   // Animation values
@@ -53,18 +54,18 @@ export default function VersesScreen({ navigation, route }) {
           Animated.parallel([
             Animated.timing(fadeAnim, {
               toValue: 1,
-              duration: 600,
+              duration: 800,
               useNativeDriver: true,
             }),
             Animated.timing(headerSlideAnim, {
               toValue: 0,
-              duration: 500,
+              duration: 600,
               easing: Easing.out(Easing.back(1.2)),
               useNativeDriver: true,
             }),
             Animated.timing(footerSlideAnim, {
               toValue: 0,
-              duration: 700,
+              duration: 800,
               easing: Easing.out(Easing.cubic),
               useNativeDriver: true,
             })
@@ -96,7 +97,6 @@ export default function VersesScreen({ navigation, route }) {
       }
     })();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [b]);
 
   // Compute prev/next targets whenever (b,c,maxChapter,booksCount) change
@@ -140,23 +140,31 @@ export default function VersesScreen({ navigation, route }) {
     headerSlideAnim.setValue(-50);
     footerSlideAnim.setValue(100);
     
-    // push a new Verses screen with next params
     navigation.navigate('Verses', { book: target.book, chapter: target.chapter });
-    // allow quick subsequent taps; RN nav will remount/useEffect anyway
     setTimeout(() => setNavBusy(false), 50);
   };
 
   const VerseItem = ({ item, index }) => {
     const verseScale = useRef(new Animated.Value(0.9)).current;
+    const verseSlide = useRef(new Animated.Value(20)).current;
     
     useEffect(() => {
-      Animated.spring(verseScale, {
-        toValue: 1,
-        delay: index * 30,
-        friction: 7,
-        tension: 40,
-        useNativeDriver: true,
-      }).start();
+      Animated.parallel([
+        Animated.spring(verseScale, {
+          toValue: 1,
+          delay: index * 40,
+          friction: 7,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+        Animated.timing(verseSlide, {
+          toValue: 0,
+          duration: 500,
+          delay: index * 40,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        })
+      ]).start();
     }, []);
 
     return (
@@ -164,7 +172,7 @@ export default function VersesScreen({ navigation, route }) {
         style={[
           styles.verseItem,
           { 
-            transform: [{ scale: verseScale }],
+            transform: [{ scale: verseScale }, { translateX: verseSlide }],
             opacity: fadeAnim 
           }
         ]}
@@ -191,36 +199,65 @@ export default function VersesScreen({ navigation, route }) {
   if (err) {
     return (
       <View style={styles.errorContainer}>
+        <Ionicons name="warning" size={48} color={colors.error} style={styles.errorIcon} />
         <Text style={styles.errorTitle}>{BOOKS[b]} {c}</Text>
-        <Text style={styles.errorText}>Failed to load verses.</Text>
+        <Text style={styles.errorText}>Failed to load verses. Please try again.</Text>
+        <Pressable 
+          style={styles.retryButton}
+          onPress={() => navigation.replace('Verses', { book: b, chapter: c })}
+        >
+          <Text style={styles.retryText}>Retry</Text>
+        </Pressable>
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <Animated.View 
-        style={[
-          styles.header,
-          { 
-            opacity: fadeAnim,
-            transform: [{ translateY: headerSlideAnim }] 
-          }
-        ]}
+    <View style={styles.container}>
+      {/* Custom Header */}
+      <LinearGradient
+        colors={[colors.primary, colors.primaryDark]}
+        style={[styles.headerGradient, { paddingTop: insets.top + 10 }]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
       >
-        <View style={styles.headerContent}>
-          <Text style={styles.bookTitle}>{BOOKS[b]}</Text>
-          <Text style={styles.chapterTitle}>Chapter {c}</Text>
-          {maxChapter ? (
-            <Text style={styles.chapterProgress}>
-              {c} of {maxChapter}
-            </Text>
-          ) : null}
-        </View>
-      </Animated.View>
+        <Animated.View 
+          style={[
+            styles.header,
+            { 
+              opacity: fadeAnim,
+              transform: [{ translateY: headerSlideAnim }] 
+            }
+          ]}
+        >
+          {/* Back Button */}
+          <Pressable 
+            onPress={() => navigation.goBack()}
+            style={({ pressed }) => [
+              styles.backButton,
+              { opacity: pressed ? 0.7 : 1 }
+            ]}
+          >
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </Pressable>
 
-      {/* Verses */}
+          {/* Title Section */}
+          <View style={styles.titleContainer}>
+            <Text style={styles.bookTitle}>{BOOKS[b]}</Text>
+            <Text style={styles.chapterTitle}>Chapter {c}</Text>
+            {maxChapter ? (
+              <Text style={styles.chapterProgress}>
+                {c} of {maxChapter}
+              </Text>
+            ) : null}
+          </View>
+
+          {/* Spacer for balance */}
+          <View style={styles.headerSpacer} />
+        </Animated.View>
+      </LinearGradient>
+
+      {/* Verses List */}
       <FlatList
         data={data}
         keyExtractor={(item) => String(item.Versecount)}
@@ -229,23 +266,17 @@ export default function VersesScreen({ navigation, route }) {
         maxToRenderPerBatch={20}
         windowSize={10}
         removeClippedSubviews
-        getItemLayout={(_, index) => ({
-          length: 80,
-          offset: 80 * index,
-          index,
-        })}
-        contentContainerStyle={[
-          styles.listContent,
-          { paddingBottom: 70  } // was 100
-        ]}
+        contentContainerStyle={[styles.listContent, { paddingBottom: 100 }]}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
       />
 
+      {/* Navigation Footer */}
       <Animated.View
         style={[
-          styles.footer,          
+          styles.footer,
           { 
-            paddingBottom:insets.bottom,
+            paddingBottom: insets.bottom,
             opacity: fadeAnim,
             transform: [{ translateY: footerSlideAnim }] 
           }
@@ -254,11 +285,7 @@ export default function VersesScreen({ navigation, route }) {
         <View style={styles.navButtons}>
           <NavButton
             direction="prev"
-            label={
-              prevTarget
-                ? `${BOOKS[prevTarget.book]} ${prevTarget.chapter}`
-                : 'Previous'
-            }
+            label={prevTarget ? `← ${BOOKS[prevTarget.book]} ${prevTarget.chapter}` : '← Previous'}
             disabled={!prevTarget || navBusy}
             onPress={() => goTo(prevTarget)}
           />
@@ -271,17 +298,13 @@ export default function VersesScreen({ navigation, route }) {
           
           <NavButton
             direction="next"
-            label={
-              nextTarget
-                ? `${BOOKS[nextTarget.book]} ${nextTarget.chapter}`
-                : 'Next'
-            }
+            label={nextTarget ? `${BOOKS[nextTarget.book]} ${nextTarget.chapter} →` : 'Next →'}
             disabled={!nextTarget || navBusy}
             onPress={() => goTo(nextTarget)}
           />
         </View>
       </Animated.View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -313,9 +336,6 @@ function NavButton({ direction, label, disabled, onPress }) {
         onPress={onPress}
         style={[styles.navButton, disabled && styles.navButtonDisabled]}
       >
-        {direction === 'prev' && (
-          <Text style={styles.navIcon}>◀</Text>
-        )}
         <Text 
           style={[styles.navButtonText, disabled && styles.navButtonTextDisabled]}
           numberOfLines={1}
@@ -323,9 +343,6 @@ function NavButton({ direction, label, disabled, onPress }) {
         >
           {label}
         </Text>
-        {direction === 'next' && (
-          <Text style={styles.navIcon}>▶</Text>
-        )}
       </Pressable>
     </Animated.View>
   );
@@ -354,73 +371,110 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.background,
   },
+  errorIcon: {
+    marginBottom: 16,
+  },
   errorTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 12,
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 8,
     color: colors.textPrimary,
+    textAlign: 'center',
   },
   errorText: {
     fontSize: 16,
     color: colors.textSecondary,
     textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  retryText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 16,
+  },
+  headerGradient: {
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    shadowColor: colors.primaryDark,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 10,
   },
   header: {
-    padding: 20,
-    paddingTop: 10,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.separator,
-    shadowColor: colors.textPrimary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  headerContent: {
+  backButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF20',
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
     alignItems: 'center',
   },
+  titleContainer: {
+    flex: 1,
+    alignItems: 'center',
+    marginHorizontal: 16,
+  },
   bookTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.primary,
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#FFFFFF',
     marginBottom: 4,
+    textAlign: 'center',
   },
   chapterTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: colors.textPrimary,
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   chapterProgress: {
     fontSize: 14,
-    color: colors.textSecondary,
+    color: '#FFFFFF',
+    opacity: 0.9,
+  },
+  headerSpacer: {
+    width: 40,
   },
   listContent: {
-    padding: 16,
-    paddingBottom: 100, // Space for footer
+    padding: 20,
+    paddingTop: 24,
   },
   verseItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    padding: 16,
-    marginBottom: 12,
-    borderRadius: 12,
+    padding: 20,
+    marginBottom: 16,
+    borderRadius: 16,
     backgroundColor: colors.surface,
     shadowColor: colors.textTertiary,
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 1,
+    shadowRadius: 6,
+    elevation: 2,
   },
   verseNumber: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: colors.primary + '20',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 16,
     marginTop: 2,
   },
   verseNumberText: {
@@ -430,70 +484,67 @@ const styles = StyleSheet.create({
   },
   verseText: {
     flex: 1,
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 17,
+    lineHeight: 26,
     color: colors.textPrimary,
+    textAlign: 'justify',
   },
   footer: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    padding: 16,
+    padding: 20,
+    paddingBottom: 10,
     borderTopWidth: 1,
     borderColor: colors.separator,
     backgroundColor: colors.surface,
     shadowColor: colors.textPrimary,
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 5,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 8,
   },
   navButtons: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 16,
   },
   navButton: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primary,
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 10,
-    minWidth: 80,
+    borderRadius: 12,
+    minWidth: 100,
   },
   navButtonDisabled: {
-    backgroundColor: colors.textTertiary + '40',
+    backgroundColor: colors.textTertiary + '30',
   },
   navButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#FFFFFF',
-    marginHorizontal: 4,
-    maxWidth: 100,
   },
   navButtonTextDisabled: {
     color: colors.textTertiary,
   },
-  navIcon: {
-    color: '#FFFFFF',
-    fontSize: 12,
-  },
   currentIndicator: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     backgroundColor: colors.background,
-    borderRadius: 8,
-    minWidth: 80,
+    borderRadius: 10,
+    minWidth: 100,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.separator,
   },
   currentText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: colors.textSecondary,
+    fontWeight: '700',
+    color: colors.primary,
   },
 });

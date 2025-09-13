@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { 
   ActivityIndicator, 
   FlatList, 
@@ -15,7 +15,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../utils/colors';
 import { searchVerses } from '../lib/queries';
 import { BOOKS } from '../lib/books';
-import { Ionicons } from '@expo/vector-icons'; // Or use text icons if unavailable
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 
@@ -29,10 +30,30 @@ export default function SearchScreen({ navigation }) {
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 100;
 
-  // Animation values
+  // Animation values - only animate on mount
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const inputSlideAnim = useRef(new Animated.Value(-30)).current;
-  const resultsSlideAnim = useRef(new Animated.Value(30)).current;
+  const headerSlideAnim = useRef(new Animated.Value(-50)).current;
+  const hasAnimated = useRef(false);
+
+  useEffect(() => {
+    // Animate on mount only once
+    if (!hasAnimated.current) {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+        Animated.timing(headerSlideAnim, {
+          toValue: 0,
+          duration: 500,
+          easing: Easing.out(Easing.back(1.2)),
+          useNativeDriver: true,
+        })
+      ]).start();
+      hasAnimated.current = true;
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,21 +72,6 @@ export default function SearchScreen({ navigation }) {
         const rows = await searchVerses(debouncedQ, { limit: PAGE_SIZE, offset: 0 });
         if (!cancelled) {
           setRes(rows ?? []);
-          
-          // Animate in results
-          Animated.parallel([
-            Animated.timing(fadeAnim, {
-              toValue: 1,
-              duration: 600,
-              useNativeDriver: true,
-            }),
-            Animated.timing(resultsSlideAnim, {
-              toValue: 0,
-              duration: 500,
-              easing: Easing.out(Easing.cubic),
-              useNativeDriver: true,
-            })
-          ]).start();
         }
       } catch (e) {
         if (!cancelled) setErr(e);
@@ -77,16 +83,6 @@ export default function SearchScreen({ navigation }) {
 
     return () => { cancelled = true; };
   }, [debouncedQ]);
-
-  useEffect(() => {
-    // Animate input on mount
-    Animated.timing(inputSlideAnim, {
-      toValue: 0,
-      duration: 500,
-      easing: Easing.out(Easing.back(1.2)),
-      useNativeDriver: true,
-    }).start();
-  }, []);
 
   const loadMore = async () => {
     if (loading || debouncedQ.length < 2) return;
@@ -105,78 +101,83 @@ export default function SearchScreen({ navigation }) {
 
   const keyExtractor = (item, idx) => `${item.Book}-${item.Chapter}-${item.Versecount}-${idx}`;
 
-  const SearchResultItem = ({ item, index }) => {
-    const itemSlideAnim = useRef(new Animated.Value(50)).current;
-    
-    useEffect(() => {
-      Animated.timing(itemSlideAnim, {
-        toValue: 0,
-        duration: 500,
-        delay: index * 40,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-    }, []);
-
+  const SearchResultItem = React.memo(({ item, index }) => {
     return (
-      <Animated.View 
-        style={{ 
-          transform: [{ translateX: itemSlideAnim }],
-          opacity: fadeAnim
-        }}
+      <Pressable
+        onPress={() => navigation.navigate('Verses', { book: item.Book, chapter: item.Chapter })}
+        style={({ pressed }) => [
+          styles.resultItem,
+          { backgroundColor: pressed ? colors.primaryLight + '10' : colors.surface }
+        ]}
       >
-        <Pressable
-          onPress={() => navigation.navigate('Verses', { book: item.Book, chapter: item.Chapter })}
-          style={({ pressed }) => [
-            styles.resultItem,
-            { backgroundColor: pressed ? colors.primaryLight + '10' : colors.surface }
-          ]}
-        >
-          <View style={styles.resultHeader}>
-            <Text style={styles.reference}>
-              {BOOKS[item.Book]} {item.Chapter}:{item.Versecount}
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
-          </View>
-          <Highlighted text={item.verse} query={debouncedQ} />
-        </Pressable>
-      </Animated.View>
+        <View style={styles.resultHeader}>
+          <Text style={styles.reference}>
+            {BOOKS[item.Book]} {item.Chapter}:{item.Versecount}
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textTertiary} />
+        </View>
+        <Highlighted text={item.verse} query={debouncedQ} />
+      </Pressable>
     );
-  };
+  });
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Search Header */}
-      <Animated.View 
-        style={[
-          styles.searchHeader,
-          { 
-            opacity: fadeAnim,
-            transform: [{ translateX: inputSlideAnim }] 
-          }
-        ]}
+      <LinearGradient
+        colors={[colors.primary, colors.primaryDark]}
+        style={styles.headerGradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
       >
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={20} color={colors.textTertiary} style={styles.searchIcon} />
-          <TextInput
-            value={q}
-            onChangeText={setQ}
-            placeholder="Search scriptures..."
-            placeholderTextColor={colors.textTertiary}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-            onSubmitEditing={() => setQ(q)}
-            clearButtonMode="while-editing"
-            style={styles.searchInput}
-          />
-        </View>
-        {debouncedQ.length >= 2 && (
+        <Animated.View 
+          style={[
+            styles.header,
+            { 
+              opacity: fadeAnim,
+              transform: [{ translateY: headerSlideAnim }] 
+            }
+          ]}
+        >
+          {/* Back Button */}
+          <Pressable 
+            onPress={() => navigation.goBack()}
+            style={({ pressed }) => [
+              styles.backButton,
+              { opacity: pressed ? 0.7 : 1 }
+            ]}
+          >
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </Pressable>
+
+          {/* Search Input */}
+          <View style={styles.searchContainer}>
+            <Ionicons name="search" size={20} color="#FFFFFF" style={styles.searchIcon} />
+            <TextInput
+              value={q}
+              onChangeText={setQ}
+              placeholder="Search scriptures..."
+              placeholderTextColor="#FFFFFF90"
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+              onSubmitEditing={() => setQ(q)}
+              clearButtonMode="while-editing"
+              style={styles.searchInput}
+            />
+          </View>
+
+          {/* Spacer for balance */}
+          <View style={styles.headerSpacer} />
+        </Animated.View>
+      </LinearGradient>
+
+      {debouncedQ.length >= 2 && res.length > 0 && (
+        <View style={styles.resultsCount}>
           <Text style={styles.searchInfo}>
             {res.length} result{res.length !== 1 ? 's' : ''} found
           </Text>
-        )}
-      </Animated.View>
+        </View>
+      )}
 
       {err && (
         <View style={styles.errorContainer}>
@@ -191,15 +192,7 @@ export default function SearchScreen({ navigation }) {
           <Text style={styles.loadingText}>Searching for "{debouncedQ}"...</Text>
         </View>
       ) : (
-        <Animated.View 
-          style={[
-            styles.resultsContainer,
-            { 
-              opacity: fadeAnim,
-              transform: [{ translateY: resultsSlideAnim }] 
-            }
-          ]}
-        >
+        <View style={styles.resultsContainer}>
           <FlatList
             data={res}
             keyExtractor={keyExtractor}
@@ -239,7 +232,7 @@ export default function SearchScreen({ navigation }) {
               ) : null
             }
           />
-        </Animated.View>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -286,38 +279,65 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  searchHeader: {
-    padding: 16,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.separator,
-    shadowColor: colors.textPrimary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+  headerGradient: {
+    paddingTop: 50,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    shadowColor: colors.primaryDark,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
   },
-  searchContainer: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.background,
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF20',
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF20',
     borderRadius: 12,
     paddingHorizontal: 12,
-    marginBottom: 8,
+    marginHorizontal: 12,
+    height: 44,
   },
   searchIcon: {
     marginRight: 8,
   },
   searchInput: {
     flex: 1,
-    paddingVertical: 12,
     fontSize: 16,
-    color: colors.textPrimary,
+    color: '#FFFFFF',
+    paddingVertical: 0,
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  resultsCount: {
+    padding: 16,
+    paddingBottom: 8,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.separator,
   },
   searchInfo: {
     fontSize: 14,
     color: colors.textSecondary,
-    marginTop: 4,
+    fontWeight: '500',
   },
   errorContainer: {
     flexDirection: 'row',
