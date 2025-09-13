@@ -53,6 +53,7 @@ export default function VersesScreen({ navigation, route }) {
 
   // FAB speed-dial animation
   const fabOpen = useRef(new Animated.Value(0)).current; // 0 closed, 1 open
+  const fabIsOpen = useRef(false);
 
   // List ref
   const listRef = useRef(null);
@@ -130,7 +131,7 @@ export default function VersesScreen({ navigation, route }) {
 
       let next = null;
       if (c < maxChapter) next = { book: b, chapter: c + 1 };
-      else if (b < booksCount - 1) next = { book: b + 1, chapter: 1 };
+      else if (booksCount && b < booksCount - 1) next = { book: b + 1, chapter: 1 };
 
       if (!cancelled) { setPrevTarget(prev); setNextTarget(next); }
     })();
@@ -143,7 +144,8 @@ export default function VersesScreen({ navigation, route }) {
     setNavBusy(true);
     fadeAnim.setValue(0);
     headerSlideAnim.setValue(-40);
-    navigation.navigate('Verses', { book: target.book, chapter: target.chapter, verse: undefined });
+    // highlight + auto-scroll to the first verse in the new chapter
+    navigation.navigate('Verses', { book: target.book, chapter: target.chapter, verse: 1 });
     setTimeout(() => setNavBusy(false), 60);
   };
 
@@ -156,7 +158,7 @@ export default function VersesScreen({ navigation, route }) {
     if (!text) return 'empty';
     return new Promise((resolve) => {
       Speech.speak(text, {
-        language: 'en-US',
+        language: 'en-US', // make configurable if needed
         rate: 0.5,
         pitch: 1.0,
         onDone: () => resolve('done'),
@@ -211,14 +213,33 @@ export default function VersesScreen({ navigation, route }) {
     setCurrentReadIndex(-1);
   };
 
+  // At edges, hop chapters and highlight verse 1
   const nextVerse = () => {
     if (!data?.length) return;
+    const atEnd = currentReadIndex >= data.length - 1;
+    if (atEnd) {
+      if (nextTarget) {
+        stopReading();
+        // ensure highlight at verse 1
+        navigation.replace('Verses', { book: nextTarget.book, chapter: nextTarget.chapter, verse: 1 });
+      }
+      return;
+    }
     const nextIdx = Math.min(currentReadIndex === -1 ? 0 : currentReadIndex + 1, data.length - 1);
     stopReading(); playFromIndex(nextIdx);
   };
 
   const prevVerse = () => {
     if (!data?.length) return;
+    const atStart = currentReadIndex <= 0;
+    if (atStart) {
+      if (prevTarget) {
+        stopReading();
+        // choose 1 (first verse) to highlight; switch to last verse if you prefer
+        navigation.replace('Verses', { book: prevTarget.book, chapter: prevTarget.chapter, verse: 1 });
+      }
+      return;
+    }
     const prevIdx = Math.max(currentReadIndex === -1 ? 0 : currentReadIndex - 1, 0);
     stopReading(); playFromIndex(prevIdx);
   };
@@ -232,17 +253,18 @@ export default function VersesScreen({ navigation, route }) {
     return () => clearTimeout(id);
   }, [currentReadIndex]);
 
-  // FAB: toggle open/close
+  // FAB toggle (don't rely on private _value)
   const toggleFab = () => {
+    fabIsOpen.current = !fabIsOpen.current;
     Animated.spring(fabOpen, {
-      toValue: (fabOpen)._value ? 0 : 1,
+      toValue: fabIsOpen.current ? 1 : 0,
       useNativeDriver: true,
       friction: 6,
       tension: 60,
     }).start();
   };
 
-  // Derived transforms for actions (translateY up & fade in)
+  // Derived transforms for actions (translateY up & fade)
   const act1Style = {
     transform: [
       { translateY: fabOpen.interpolate({ inputRange: [0, 1], outputRange: [0, -70] }) },
@@ -259,7 +281,7 @@ export default function VersesScreen({ navigation, route }) {
   };
 
   const VerseItem = ({ item, index, isSelected }) => {
-    // OUTER (native transform)
+    // OUTER (native transform/opacity)
     const verseScale = useRef(new Animated.Value(0.98)).current;
     const verseSlide = useRef(new Animated.Value(14)).current;
     // INNER (JS bg pulse)
@@ -322,8 +344,8 @@ export default function VersesScreen({ navigation, route }) {
     );
   }
 
-  // bottom padding now only needs to clear the FAB tap area a bit
-  const bottomPad = (insets.bottom || 0) + 24;
+  // small bottom padding so last rows aren't under the FAB
+  const bottomPad = (insets.bottom || 0) + 90;
 
   return (
     <SafeAreaView style={styles.container} edges={['right', 'left']}>
@@ -374,7 +396,7 @@ export default function VersesScreen({ navigation, route }) {
               </Pressable>
             </View>
 
-            {/* Quick stop in header (optional): */}
+            {/* Quick stop in header */}
             <Pressable onPress={stopReading} style={styles.headBtn} accessibilityLabel="Stop reading">
               <Ionicons name="stop" size={18} color="#fff" />
             </Pressable>
@@ -418,7 +440,7 @@ export default function VersesScreen({ navigation, route }) {
             ]}
             pointerEvents="box-none"
           >
-            {/* Action 2: Next */}
+            {/* Action: Next verse */}
             <Animated.View style={[styles.fabAction, act1Style]}>
               <Pressable
                 onPress={() => { toggleFab(); nextVerse(); }}
@@ -429,7 +451,7 @@ export default function VersesScreen({ navigation, route }) {
               </Pressable>
             </Animated.View>
 
-            {/* Action 1: Prev */}
+            {/* Action: Previous verse */}
             <Animated.View style={[styles.fabAction, act2Style]}>
               <Pressable
                 onPress={() => { toggleFab(); prevVerse(); }}
@@ -440,7 +462,7 @@ export default function VersesScreen({ navigation, route }) {
               </Pressable>
             </Animated.View>
 
-            {/* Main FAB */}
+            {/* Main FAB: Play/Pause (tap), Stop (long-press) */}
             <Pressable
               onPress={() => { if (isReading) pause(); else play(); }}
               onLongPress={stopReading}
