@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Animated,
   Easing,
+  Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,20 +42,22 @@ export default function VersesScreen({ navigation, route }) {
   const [nextTarget, setNextTarget] = useState(null);
   const [navBusy, setNavBusy] = useState(false);
 
-  // --- Speech state ---
+  // Speech state
   const [isReading, setIsReading] = useState(false);
-  const [currentReadIndex, setCurrentReadIndex] = useState(-1); // -1 means idle
+  const [currentReadIndex, setCurrentReadIndex] = useState(-1);
   const speechCancelledRef = useRef(false);
 
-  // screen-level animations
+  // Header/List animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const headerSlideAnim = useRef(new Animated.Value(-50)).current;
-  const footerSlideAnim = useRef(new Animated.Value(100)).current;
+  const headerSlideAnim = useRef(new Animated.Value(-40)).current;
 
-  // list ref
-  const flatListRef = useRef(null);
+  // FAB speed-dial animation
+  const fabOpen = useRef(new Animated.Value(0)).current; // 0 closed, 1 open
 
-  // fetch verses (always full chapter)
+  // List ref
+  const listRef = useRef(null);
+
+  // Fetch verses
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -64,20 +67,10 @@ export default function VersesScreen({ navigation, route }) {
         if (!cancelled) {
           setData(rows ?? []);
           Animated.parallel([
-            Animated.timing(fadeAnim, {
-              toValue: 1,
-              duration: 800,
-              useNativeDriver: true,
-            }),
+            Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
             Animated.timing(headerSlideAnim, {
               toValue: 0,
-              duration: 600,
-              easing: Easing.out(Easing.back(1.2)),
-              useNativeDriver: true,
-            }),
-            Animated.timing(footerSlideAnim, {
-              toValue: 0,
-              duration: 800,
+              duration: 450,
               easing: Easing.out(Easing.cubic),
               useNativeDriver: true,
             }),
@@ -89,27 +82,21 @@ export default function VersesScreen({ navigation, route }) {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [b, c]);
 
-  // auto-scroll to verse if provided (on initial render)
+  // Auto-scroll to initial verse param
   useEffect(() => {
-    if (!v || !data?.length || !flatListRef.current) return;
+    if (!v || !data?.length || !listRef.current) return;
     const index = data.findIndex((row) => Number(row.Versecount) === Number(v));
     if (index < 0) return;
     const id = setTimeout(() => {
-      flatListRef.current?.scrollToIndex({
-        index,
-        animated: true,
-        viewPosition: 0.25,
-      });
-    }, 100);
+      listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.25 });
+    }, 120);
     return () => clearTimeout(id);
   }, [data, v]);
 
-  // book meta
+  // Book meta
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -124,12 +111,10 @@ export default function VersesScreen({ navigation, route }) {
         }
       } catch {}
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [b]);
 
-  // prev/next targets
+  // Prev/Next targets
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -147,36 +132,23 @@ export default function VersesScreen({ navigation, route }) {
       if (c < maxChapter) next = { book: b, chapter: c + 1 };
       else if (b < booksCount - 1) next = { book: b + 1, chapter: 1 };
 
-      if (!cancelled) {
-        setPrevTarget(prev);
-        setNextTarget(next);
-      }
+      if (!cancelled) { setPrevTarget(prev); setNextTarget(next); }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [b, c, maxChapter, booksCount]);
 
-  const goTo = (target) => {
+  const goToChapter = (target) => {
     if (!target || navBusy) return;
-    // stop reading when changing chapter
     stopReading();
     setNavBusy(true);
     fadeAnim.setValue(0);
-    headerSlideAnim.setValue(-50);
-    footerSlideAnim.setValue(100);
+    headerSlideAnim.setValue(-40);
     navigation.navigate('Verses', { book: target.book, chapter: target.chapter, verse: undefined });
-    setTimeout(() => setNavBusy(false), 50);
+    setTimeout(() => setNavBusy(false), 60);
   };
 
-  // ---------------- Speech controls (expo-speech) ----------------
-  useEffect(() => {
-    // stop any speech on unmount
-    return () => {
-      speechCancelledRef.current = true;
-      Speech.stop();
-    };
-  }, []);
+  // ---------- Speech (expo-speech) ----------
+  useEffect(() => () => { speechCancelledRef.current = true; Speech.stop(); }, []);
 
   const speakOne = async (i) => {
     if (!data || i < 0 || i >= data.length) return 'invalid';
@@ -184,7 +156,7 @@ export default function VersesScreen({ navigation, route }) {
     if (!text) return 'empty';
     return new Promise((resolve) => {
       Speech.speak(text, {
-        language: 'en-US', // TODO: make this configurable from settings
+        language: 'en-US',
         rate: 0.5,
         pitch: 1.0,
         onDone: () => resolve('done'),
@@ -209,16 +181,12 @@ export default function VersesScreen({ navigation, route }) {
       i += 1;
       setCurrentReadIndex(i);
     }
-    if (!speechCancelledRef.current) {
-      setIsReading(false);
-      setCurrentReadIndex(-1);
-    }
+    if (!speechCancelledRef.current) { setIsReading(false); setCurrentReadIndex(-1); }
   };
 
   const play = () => {
     if (!data?.length) return;
     if (currentReadIndex === -1) {
-      // Start at route.params.verse if present, else 0
       if (v != null) {
         const idx = data.findIndex((row) => Number(row.Versecount) === Number(v));
         playFromIndex(idx >= 0 ? idx : 0);
@@ -231,11 +199,9 @@ export default function VersesScreen({ navigation, route }) {
   };
 
   const pause = () => {
-    // expo-speech pause/resume not consistent; emulate pause by stopping but keeping index
     speechCancelledRef.current = true;
     Speech.stop();
     setIsReading(false);
-    // keep currentReadIndex as-is
   };
 
   const stopReading = () => {
@@ -248,116 +214,87 @@ export default function VersesScreen({ navigation, route }) {
   const nextVerse = () => {
     if (!data?.length) return;
     const nextIdx = Math.min(currentReadIndex === -1 ? 0 : currentReadIndex + 1, data.length - 1);
-    stopReading();
-    playFromIndex(nextIdx);
+    stopReading(); playFromIndex(nextIdx);
   };
 
   const prevVerse = () => {
     if (!data?.length) return;
     const prevIdx = Math.max(currentReadIndex === -1 ? 0 : currentReadIndex - 1, 0);
-    stopReading();
-    playFromIndex(prevIdx);
+    stopReading(); playFromIndex(prevIdx);
   };
 
-  // Auto-scroll to verse being read
+  // Auto-scroll while reading
   useEffect(() => {
-    if (currentReadIndex < 0 || !flatListRef.current) return;
+    if (currentReadIndex < 0 || !listRef.current) return;
     const id = setTimeout(() => {
-      flatListRef.current?.scrollToIndex({
-        index: currentReadIndex,
-        animated: true,
-        viewPosition: 0.25,
-      });
+      listRef.current?.scrollToIndex({ index: currentReadIndex, animated: true, viewPosition: 0.25 });
     }, 60);
     return () => clearTimeout(id);
   }, [currentReadIndex]);
 
-  const VerseItem = ({ item, index, isSelected }) => {
-    // native-driven values (safe for transform/opacity)
-    const verseScale = useRef(new Animated.Value(0.9)).current;
-    const verseSlide = useRef(new Animated.Value(20)).current;
+  // FAB: toggle open/close
+  const toggleFab = () => {
+    Animated.spring(fabOpen, {
+      toValue: (fabOpen)._value ? 0 : 1,
+      useNativeDriver: true,
+      friction: 6,
+      tension: 60,
+    }).start();
+  };
 
-    // JS-driven value (needed for backgroundColor/interpolation)
-    const pulse = useRef(new Animated.Value(0)).current; // 0..1
+  // Derived transforms for actions (translateY up & fade in)
+  const act1Style = {
+    transform: [
+      { translateY: fabOpen.interpolate({ inputRange: [0, 1], outputRange: [0, -70] }) },
+      { scale: fabOpen.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) },
+    ],
+    opacity: fabOpen,
+  };
+  const act2Style = {
+    transform: [
+      { translateY: fabOpen.interpolate({ inputRange: [0, 1], outputRange: [0, -130] }) },
+      { scale: fabOpen.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) },
+    ],
+    opacity: fabOpen,
+  };
+
+  const VerseItem = ({ item, index, isSelected }) => {
+    // OUTER (native transform)
+    const verseScale = useRef(new Animated.Value(0.98)).current;
+    const verseSlide = useRef(new Animated.Value(14)).current;
+    // INNER (JS bg pulse)
+    const pulse = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
-      // native animations on OUTER node
       Animated.parallel([
-        Animated.spring(verseScale, {
-          toValue: 1,
-          delay: index * 40,
-          friction: 7,
-          tension: 40,
-          useNativeDriver: true,
-        }),
-        Animated.timing(verseSlide, {
-          toValue: 0,
-          duration: 500,
-          delay: index * 40,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
+        Animated.spring(verseScale, { toValue: 1, delay: index * 18, friction: 7, tension: 40, useNativeDriver: true }),
+        Animated.timing(verseSlide, { toValue: 0, duration: 360, delay: index * 18, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
       ]).start();
 
       if (isSelected) {
-        // JS animation on INNER node
         Animated.sequence([
-          Animated.timing(pulse, { toValue: 1, duration: 280, useNativeDriver: false }),
+          Animated.timing(pulse, { toValue: 1, duration: 240, useNativeDriver: false }),
           Animated.timing(pulse, { toValue: 0, duration: 520, useNativeDriver: false }),
-          Animated.timing(pulse, { toValue: 1, duration: 280, useNativeDriver: false }),
+          Animated.timing(pulse, { toValue: 1, duration: 240, useNativeDriver: false }),
           Animated.timing(pulse, { toValue: 0, duration: 520, useNativeDriver: false }),
         ]).start();
       }
     }, [isSelected]);
 
-    const bg = pulse.interpolate({
-      inputRange: [0, 1],
-      outputRange: [HIGHLIGHT, HIGHLIGHT_PULSE],
-    });
+    const bg = pulse.interpolate({ inputRange: [0, 1], outputRange: [HIGHLIGHT, HIGHLIGHT_PULSE] });
 
     return (
-      // OUTER: native driver only (transform + opacity)
-      <Animated.View
-        style={{
-          transform: [{ scale: verseScale }, { translateX: verseSlide }],
-          opacity: fadeAnim,
-        }}
-      >
-        {/* INNER: JS driver only (backgroundColor pulse) */}
+      <Animated.View style={{ transform: [{ scale: verseScale }, { translateY: verseSlide }], opacity: fadeAnim }}>
         <Animated.View
           style={[
-            styles.verseItem,
-            isSelected && {
-              backgroundColor: bg,
-              borderColor: colors.primary,
-              borderWidth: 1.5,
-            },
+            styles.verseCard,
+            isSelected && { backgroundColor: bg, borderColor: colors.primary, borderWidth: 1 },
           ]}
         >
-          <View
-            style={[
-              styles.verseNumber,
-              isSelected && { backgroundColor: colors.primary },
-            ]}
-          >
-            <Text
-              style={[
-                styles.verseNumberText,
-                isSelected && { color: '#FFFFFF' },
-              ]}
-            >
-              {item.Versecount}
-            </Text>
+          <View style={[styles.badge, isSelected && { backgroundColor: colors.primary }]}>
+            <Text style={[styles.badgeText, isSelected && { color: '#fff' }]}>{item.Versecount}</Text>
           </View>
-
-          <Text
-            style={[
-              styles.verseText,
-              isSelected && { color: colors.primaryDark },
-            ]}
-          >
-            {item.verse}
-          </Text>
+          <Text style={[styles.verseBody, isSelected && { color: colors.primaryDark }]}>{item.verse}</Text>
         </Animated.View>
       </Animated.View>
     );
@@ -375,317 +312,259 @@ export default function VersesScreen({ navigation, route }) {
   if (err) {
     return (
       <View style={styles.errorContainer}>
-        <Ionicons name="warning" size={48} color={colors.error} style={styles.errorIcon} />
+        <Ionicons name="warning" size={48} color={colors.error} style={{ marginBottom: 12 }} />
         <Text style={styles.errorTitle}>{BOOKS[b]} {c}</Text>
         <Text style={styles.errorText}>Failed to load verses. Please try again.</Text>
-        <Pressable
-          style={styles.retryButton}
-          onPress={() => navigation.replace('Verses', { book: b, chapter: c, verse: v })}
-        >
+        <Pressable style={styles.retryButton} onPress={() => navigation.replace('Verses', { book: b, chapter: c, verse: v })}>
           <Text style={styles.retryText}>Retry</Text>
         </Pressable>
       </View>
     );
   }
 
+  // bottom padding now only needs to clear the FAB tap area a bit
+  const bottomPad = (insets.bottom || 0) + 24;
+
   return (
     <SafeAreaView style={styles.container} edges={['right', 'left']}>
       <StatusBar style="light" backgroundColor={colors.primary} />
       <View style={{ flex: 1, backgroundColor: colors.background }}>
+        {/* HEADER */}
         <LinearGradient
           colors={[colors.primary, colors.primaryDark]}
-          style={[styles.headerGradient, { paddingTop: insets.top + 10 }]}
+          style={[styles.headerGrad, { paddingTop: insets.top + 8 }]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
         >
-          <Animated.View
-            style={[
-              styles.header,
-              { opacity: fadeAnim, transform: [{ translateY: headerSlideAnim }] },
-            ]}
-          >
+          <Animated.View style={[styles.headerRow, { opacity: fadeAnim, transform: [{ translateY: headerSlideAnim }] }]}>
             <Pressable
               onPress={() => navigation.goBack()}
-              style={({ pressed }) => [styles.backButton, { opacity: pressed ? 0.7 : 1 }]}
+              style={({ pressed }) => [styles.headBtn, { opacity: pressed ? 0.7 : 1 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
             >
-              <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+              <Ionicons name="chevron-back" size={22} color="#fff" />
             </Pressable>
 
-            <View style={styles.titleContainer}>
-              <Text style={styles.bookTitle}>{BOOKS[b]}</Text>
-              <Text style={styles.chapterTitle}>Chapter {c}</Text>
-              {maxChapter ? (
-                <Text style={styles.chapterProgress}>
-                  {c} of {maxChapter}
+            {/* Title + inline chapter nav */}
+            <View style={styles.headerTitleWrap}>
+              <Pressable
+                disabled={!prevTarget}
+                onPress={() => goToChapter(prevTarget)}
+                style={({ pressed }) => [styles.inlineNavBtn, !prevTarget && { opacity: 0.4 }, { opacity: pressed ? 0.6 : 1 }]}
+                accessibilityLabel="Previous chapter"
+              >
+                <Ionicons name="chevron-back" size={18} color="#fff" />
+              </Pressable>
+
+              <View style={{ alignItems: 'center', minWidth: 140 }}>
+                <Text style={styles.headerTitle}>{BOOKS[b]}</Text>
+                <Text style={styles.headerSubtitle}>
+                  Chapter {c}{maxChapter ? ` · ${c} / ${maxChapter}` : ''}
                 </Text>
-              ) : null}
+              </View>
+
+              <Pressable
+                disabled={!nextTarget}
+                onPress={() => goToChapter(nextTarget)}
+                style={({ pressed }) => [styles.inlineNavBtn, !nextTarget && { opacity: 0.4 }, { opacity: pressed ? 0.6 : 1 }]}
+                accessibilityLabel="Next chapter"
+              >
+                <Ionicons name="chevron-forward" size={18} color="#fff" />
+              </Pressable>
             </View>
 
-            <View style={styles.headerSpacer} />
+            {/* Quick stop in header (optional): */}
+            <Pressable onPress={stopReading} style={styles.headBtn} accessibilityLabel="Stop reading">
+              <Ionicons name="stop" size={18} color="#fff" />
+            </Pressable>
           </Animated.View>
         </LinearGradient>
 
+        {/* LIST */}
         <FlatList
-          ref={flatListRef}
+          ref={listRef}
           data={data}
           keyExtractor={(item) => String(item.Versecount)}
           renderItem={({ item, index }) => (
             <VerseItem
               item={item}
               index={index}
-              isSelected={
-                Number(item.Versecount) === Number(v) || index === currentReadIndex
-              }
+              isSelected={Number(item.Versecount) === Number(v) || index === currentReadIndex}
             />
           )}
           initialNumToRender={20}
           maxToRenderPerBatch={20}
           windowSize={10}
           removeClippedSubviews
-          contentContainerStyle={[styles.listContent, { paddingBottom: 160 }]}  
+          contentContainerStyle={[styles.listContent, { paddingBottom: bottomPad }]}
           showsVerticalScrollIndicator={false}
           scrollEventThrottle={16}
           onScrollToIndexFailed={(info) => {
             const approx = Math.max(0, info.averageItemLength * (info.index - 3));
-            flatListRef.current?.scrollToOffset({ offset: approx, animated: false });
+            listRef.current?.scrollToOffset({ offset: approx, animated: false });
             setTimeout(() => {
-              flatListRef.current?.scrollToIndex({
-                index: info.index,
-                animated: true,
-                viewPosition: 0.25,
-              });
+              listRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.25 });
             }, 60);
           }}
         />
 
-        {/* Player (Speech) */}
-        <View style={[styles.playerBar, { paddingBottom: Math.max(8, (insets.bottom || 0) / 2) }]}>
-          <Pressable onPress={prevVerse} style={styles.playerBtn}>
-            <Ionicons name="play-skip-back" size={20} color="#fff" />
-          </Pressable>
+        {/* FAB + Speed Dial */}
+        <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
+          <View
+            style={[
+              styles.fabArea,
+              { bottom: Math.max(insets.bottom, 16), right: Math.max(insets.right ?? 16, 16) },
+            ]}
+            pointerEvents="box-none"
+          >
+            {/* Action 2: Next */}
+            <Animated.View style={[styles.fabAction, act1Style]}>
+              <Pressable
+                onPress={() => { toggleFab(); nextVerse(); }}
+                style={styles.fabActionBtn}
+                accessibilityLabel="Next verse"
+              >
+                <Ionicons name="play-skip-forward" size={18} color="#fff" />
+              </Pressable>
+            </Animated.View>
 
-          {isReading ? (
-            <Pressable onPress={pause} style={[styles.playerBtn, styles.playerMain]}>
-              <Ionicons name="pause" size={20} color="#fff" />
-              <Text style={styles.playerText}>Pause</Text>
+            {/* Action 1: Prev */}
+            <Animated.View style={[styles.fabAction, act2Style]}>
+              <Pressable
+                onPress={() => { toggleFab(); prevVerse(); }}
+                style={styles.fabActionBtn}
+                accessibilityLabel="Previous verse"
+              >
+                <Ionicons name="play-skip-back" size={18} color="#fff" />
+              </Pressable>
+            </Animated.View>
+
+            {/* Main FAB */}
+            <Pressable
+              onPress={() => { if (isReading) pause(); else play(); }}
+              onLongPress={stopReading}
+              style={({ pressed }) => [styles.fab, { opacity: pressed ? 0.85 : 1 }]}
+              accessibilityRole="button"
+              accessibilityLabel={isReading ? 'Pause (long press to stop)' : 'Play (long press to stop)'}
+            >
+              <Ionicons name={isReading ? 'pause' : 'play'} size={24} color="#fff" />
             </Pressable>
-          ) : (
-            <Pressable onPress={play} style={[styles.playerBtn, styles.playerMain]}>
-              <Ionicons name="play" size={20} color="#fff" />
-              <Text style={styles.playerText}>Play</Text>
+
+            {/* Speed-dial toggle */}
+            <Pressable
+              onPress={toggleFab}
+              style={({ pressed }) => [styles.fabSmall, { opacity: pressed ? 0.85 : 1 }]}
+              accessibilityLabel="More player actions"
+            >
+              <Ionicons name="options" size={18} color="#fff" />
             </Pressable>
-          )}
-
-          <Pressable onPress={stopReading} style={styles.playerBtn}>
-            <Ionicons name="stop" size={20} color="#fff" />
-          </Pressable>
-
-          <Pressable onPress={nextVerse} style={styles.playerBtn}>
-            <Ionicons name="play-skip-forward" size={20} color="#fff" />
-          </Pressable>
-        </View>
-
-        {/* Prev/Next chapter footer */}
-        <Animated.View
-          style={[
-            styles.footer,
-            {
-              paddingBottom: insets.bottom || 10,
-              opacity: fadeAnim,
-              transform: [{ translateY: footerSlideAnim }],
-            },
-          ]}
-        >
-          <View style={styles.navButtons}>
-            <NavButton
-              direction="prev"
-              label={prevTarget ? `← ${BOOKS[prevTarget.book]} ${prevTarget.chapter}` : '← Previous'}
-              disabled={!prevTarget || navBusy}
-              onPress={() => goTo(prevTarget)}
-            />
-
-            <View style={styles.currentIndicator}>
-              <Text style={styles.currentText}>
-                {BOOKS[b]} {c}
-              </Text>
-            </View>
-
-            <NavButton
-              direction="next"
-              label={nextTarget ? `${BOOKS[nextTarget.book]} ${nextTarget.chapter} →` : 'Next →'}
-              disabled={!nextTarget || navBusy}
-              onPress={() => goTo(nextTarget)}
-            />
           </View>
-        </Animated.View>
+        </View>
       </View>
     </SafeAreaView>
   );
 }
 
-function NavButton({ direction, label, disabled, onPress }) {
-  const scaleValue = useRef(new Animated.Value(1)).current;
-
-  const onPressIn = () => {
-    Animated.spring(scaleValue, { toValue: 0.95, useNativeDriver: true }).start();
-  };
-  const onPressOut = () => {
-    Animated.spring(scaleValue, { toValue: 1, friction: 3, tension: 40, useNativeDriver: true }).start();
-  };
-
-  return (
-    <Animated.View style={{ transform: [{ scale: scaleValue }] }}>
-      <Pressable
-        disabled={disabled}
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
-        onPress={onPress}
-        style={[styles.navButton, disabled && styles.navButtonDisabled]}
-      >
-        <Text
-          style={[styles.navButtonText, disabled && styles.navButtonTextDisabled]}
-          numberOfLines={1}
-          ellipsizeMode="tail"
-        >
-          {label}
-        </Text>
-      </Pressable>
-    </Animated.View>
-  );
-}
+/* ---------------- Styles ---------------- */
 
 const colors = themeColors;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.primaryDark },
-  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
-  loadingText: { marginTop: 16, fontSize: 16, color: colors.textSecondary },
-  errorContainer: { flex: 1, padding: 24, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-  errorIcon: { marginBottom: 16 },
-  errorTitle: { fontSize: 22, fontWeight: '700', marginBottom: 8, color: colors.textPrimary, textAlign: 'center' },
-  errorText: { fontSize: 16, color: colors.textSecondary, textAlign: 'center', marginBottom: 20 },
-  retryButton: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 10 },
-  retryText: { color: '#FFFFFF', fontWeight: '600', fontSize: 16 },
 
-  headerGradient: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+  // Header
+  headerGrad: {
+    paddingHorizontal: 12,
+    paddingBottom: 14,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 18,
     shadowColor: colors.primaryDark,
     shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 10,
     elevation: 8,
-    zIndex: 10,
   },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backButton: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF20',
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'center',
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headBtn: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: '#FFFFFF20', alignItems: 'center', justifyContent: 'center',
   },
-  titleContainer: { flex: 1, alignItems: 'center', marginHorizontal: 16 },
-  bookTitle: { fontSize: 22, fontWeight: '800', color: '#FFFFFF', marginBottom: 4, textAlign: 'center' },
-  chapterTitle: { fontSize: 18, fontWeight: '600', color: '#FFFFFF', marginBottom: 4 },
-  chapterProgress: { fontSize: 14, color: '#FFFFFF', opacity: 0.9 },
-  headerSpacer: { width: 40 },
+  headerTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  inlineNavBtn: {
+    width: 34, height: 34, borderRadius: 10,
+    backgroundColor: '#FFFFFF25', alignItems: 'center', justifyContent: 'center',
+  },
+  headerTitle: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  headerSubtitle: { color: '#fff', opacity: 0.9, fontSize: 12, marginTop: 2 },
 
-  listContent: { padding: 20, paddingTop: 24 },
+  // List
+  listContent: { paddingHorizontal: 16, paddingTop: 18 },
 
-  verseItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    padding: 20,
-    marginBottom: 16,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    shadowColor: colors.textTertiary,
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 2,
+  verseCard: {
+    flexDirection: 'row', gap: 14,
+    paddingVertical: 16, paddingHorizontal: 14, marginBottom: 12,
+    borderRadius: 14, backgroundColor: colors.surface,
+    shadowColor: colors.textTertiary, shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
   },
-  verseNumber: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.primary + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 16,
-    marginTop: 2,
+  badge: {
+    width: 30, height: 30, borderRadius: 8,
+    backgroundColor: colors.primary + '22', alignItems: 'center', justifyContent: 'center',
   },
-  verseNumberText: { fontSize: 14, fontWeight: '700', color: colors.primary },
-  verseText: { flex: 1, fontSize: 17, lineHeight: 26, color: colors.textPrimary, textAlign: 'justify' },
+  badgeText: { color: colors.primary, fontWeight: '800', fontSize: 13 },
+  verseBody: { flex: 1, color: colors.textPrimary, fontSize: 17, lineHeight: 26 },
 
-  // Player bar
-  playerBar: {
+  // Loading / Error
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
+  loadingText: { marginTop: 12, fontSize: 16, color: colors.textSecondary },
+  errorContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: colors.background },
+  errorTitle: { fontSize: 20, fontWeight: '800', color: colors.textPrimary, marginBottom: 6 },
+  errorText: { color: colors.textSecondary, marginBottom: 18 },
+  retryButton: { backgroundColor: colors.primary, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10 },
+  retryText: { color: '#fff', fontWeight: '700' },
+
+  // FAB cluster
+  fabArea: {
     position: 'absolute',
-    left: 16,
     right: 16,
-    bottom: 80, // sits above the chapter footer
+    bottom: 16,
+    alignItems: 'flex-end',
+  },
+  fab: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    elevation: 8,
-  },
-  playerBtn: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF20',
-  },
-  playerMain: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  playerText: { color: '#fff', fontWeight: '700' },
-
-  footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    padding: 20,
-    paddingBottom: 10,
-    borderTopWidth: 1,
-    borderColor: colors.separator,
-    backgroundColor: colors.surface,
-    shadowColor: colors.textPrimary,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    elevation: 8,
-  },
-  navButtons: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
-  navButton: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    minWidth: 100,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 10, shadowOffset: { width: 0, height: 6 } },
+      android: { elevation: 10 },
+    }),
   },
-  navButtonDisabled: { backgroundColor: colors.textTertiary + '30' },
-  navButtonText: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
-  navButtonTextDisabled: { color: colors.textTertiary },
-  currentIndicator: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: colors.background,
-    borderRadius: 10,
-    minWidth: 100,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.separator,
+  fabSmall: {
+    marginTop: 10,
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: colors.primaryDark,
+    alignItems: 'center', justifyContent: 'center',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 4 } },
+      android: { elevation: 6 },
+    }),
   },
-  currentText: { fontSize: 14, fontWeight: '700', color: colors.primary },
+  fabAction: {
+    position: 'absolute',
+    right: 12,
+    bottom: 80, // base anchor under main FAB
+  },
+  fabActionBtn: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: colors.primaryDark,
+    alignItems: 'center', justifyContent: 'center',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 6, shadowOffset: { width: 0, height: 4 } },
+      android: { elevation: 6 },
+    }),
+  },
 });
