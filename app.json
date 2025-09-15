@@ -54,6 +54,12 @@
         "projectId": "358169c4-72e8-4b1e-94de-182bcb2b9234"
       }
     },
-    "owner": "eloike121"
+    "owner": "eloike121",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/358169c4-72e8-4b1e-94de-182bcb2b9234"
+    }
   }
 }
